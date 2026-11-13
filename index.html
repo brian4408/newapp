@@ -44,6 +44,15 @@
     .auth-status { position: absolute; right: 0; top: 42px; max-width: min(340px, 90vw); z-index: 5; padding: 10px 12px; border-radius: 10px; background: #fff4ed; color: #995a3d; box-shadow: 0 5px 20px #00000012; font-size: 12px; line-height: 1.55; }
     .auth-status[hidden] { display: none; }
     .header-actions { position: relative; }
+    .auth-area { display: flex; align-items: center; gap: 9px; min-width: 0; }
+    .auth-user { display: flex; align-items: center; gap: 8px; min-width: 0; color: var(--muted); font-size: 12px; }
+    .auth-avatar { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; background: #e8ecdf; }
+    .auth-button { border: 1px solid #dce2d7; border-radius: 10px; padding: 8px 12px; background: #fffefa; color: var(--green); font-size: 12px; font-weight: 750; white-space: nowrap; }
+    .auth-button:hover:not(:disabled) { background: #eff4e9; }
+    .auth-button:disabled { opacity: .65; cursor: wait; }
+    .auth-status { position: absolute; right: 0; top: 42px; max-width: min(340px, 90vw); z-index: 5; padding: 10px 12px; border-radius: 10px; background: #fff4ed; color: #995a3d; box-shadow: 0 5px 20px #00000012; font-size: 12px; line-height: 1.55; }
+    .auth-status[hidden] { display: none; }
+    .header-actions { position: relative; }
     .local-note { color: var(--muted); font-size: 12px; display: flex; align-items: center; gap: 7px; }
     .local-note::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: #8cae62; }
     .hero { text-align: center; margin-bottom: 34px; }
@@ -121,7 +130,14 @@
     <header>
       <div class="brand"><div class="brand-mark">✳</div><span>好好吃飯研究所</span></div>
       <div class="header-actions">
-        <div class="local-note" id="storageNote">資料儲存在這台裝置</div>
+        <div class="auth-area">
+          <div class="auth-user" id="authUser" hidden>
+            <img class="auth-avatar" id="authAvatar" alt="" hidden />
+            <span id="authName"></span>
+          </div>
+          <button class="auth-button" id="authButton" type="button">使用 Google 登入</button>
+        </div>
+        <div class="auth-status" id="authStatus" role="status" aria-live="polite" hidden></div>
       </div>
     </header>
     <section class="hero" aria-labelledby="page-title">
@@ -162,6 +178,80 @@
     </section>
   </main>
   <div class="toast" id="toast" role="status"></div>
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import {
+      getAuth,
+      GoogleAuthProvider,
+      onAuthStateChanged,
+      signInWithPopup,
+      signOut
+    } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyAM8Fh7InSHdACCtLqrfszVqinc2nPehfs",
+      authDomain: "newapp-6cff9.firebaseapp.com",
+      projectId: "newapp-6cff9",
+      storageBucket: "newapp-6cff9.firebasestorage.app",
+      messagingSenderId: "171960264891",
+      appId: "1:171960264891:web:9eab0f86b93fc791af619e"
+    };
+
+    const auth = getAuth(initializeApp(firebaseConfig));
+    const provider = new GoogleAuthProvider();
+    const button = document.querySelector("#authButton");
+    const userArea = document.querySelector("#authUser");
+    const name = document.querySelector("#authName");
+    const avatar = document.querySelector("#authAvatar");
+    const status = document.querySelector("#authStatus");
+
+    function showError(message = "") {
+      status.textContent = message;
+      status.hidden = !message;
+    }
+
+    onAuthStateChanged(auth, user => {
+      userArea.hidden = !user;
+      if (user) {
+        name.textContent = user.displayName || user.email || "已登入";
+        avatar.hidden = !user.photoURL;
+        if (user.photoURL) avatar.src = user.photoURL;
+        button.textContent = "登出";
+      } else {
+        name.textContent = "";
+        avatar.hidden = true;
+        avatar.removeAttribute("src");
+        button.textContent = "使用 Google 登入";
+      }
+      button.disabled = false;
+      showError();
+    }, error => {
+      console.error("Firebase auth state error:", error);
+      button.disabled = false;
+      showError("無法確認登入狀態，請重新整理後再試。");
+    });
+
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+      showError();
+      try {
+        if (auth.currentUser) await signOut(auth);
+        else await signInWithPopup(auth, provider);
+      } catch (error) {
+        console.error("Firebase authentication error:", error);
+        const messages = {
+          "auth/popup-closed-by-user": "你已關閉登入視窗，尚未登入。",
+          "auth/popup-blocked": "瀏覽器封鎖了登入視窗，請允許彈出式視窗後重試。",
+          "auth/unauthorized-domain": "目前網站網域尚未加入 Firebase Authentication 的授權網域。",
+          "auth/operation-not-allowed": "Firebase 尚未啟用 Google 登入，請至 Authentication 設定。",
+          "auth/network-request-failed": "網路連線失敗，請檢查網路後重試。"
+        };
+        showError(messages[error.code] || "登入或登出失敗，請檢查 Firebase 設定後重試。");
+      } finally {
+        button.disabled = false;
+      }
+    });
+  </script>
   <script>
     (() => {
       const STORAGE_KEY = 'restaurant-wheel-v1';
