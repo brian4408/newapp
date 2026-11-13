@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#f6f3ec" />
+  <title>今天吃什麼？｜餐廳轉盤</title>
+  <style>
+    :root {
+      --paper: #f6f3ec;
+      --surface: #fffefa;
+      --ink: #202a23;
+      --muted: #788078;
+      --line: #e8e6dc;
+      --green: #244d3a;
+      --green-deep: #183a2a;
+      --lime: #d7ed9a;
+      --coral: #ef8067;
+      --shadow: 0 18px 50px rgba(34, 49, 38, .08);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      background:
+        radial-gradient(ellipse at 50% -18%, rgba(224, 231, 194, .5), transparent 48%),
+        var(--paper);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    button, input { font: inherit; }
+    button { cursor: pointer; }
+    .page { width: min(1100px, calc(100% - 40px)); margin: 0 auto; padding: 30px 0 44px; }
+    header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 55px; }
+    .brand { display: flex; align-items: center; gap: 11px; font-size: 15px; font-weight: 750; letter-spacing: -.03em; }
+    .brand-mark { width: 34px; height: 34px; border-radius: 11px; display: grid; place-items: center; background: var(--green); color: white; font-size: 19px; }
+    .header-actions { display: flex; align-items: center; gap: 14px; }
+    .auth-area { display: flex; align-items: center; gap: 9px; min-width: 0; }
+    .auth-user { display: flex; align-items: center; gap: 8px; min-width: 0; color: var(--muted); font-size: 12px; }
+    .auth-avatar { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; background: #e8ecdf; }
+    .auth-button { border: 1px solid #dce2d7; border-radius: 10px; padding: 8px 12px; background: #fffefa; color: var(--green); font-size: 12px; font-weight: 750; white-space: nowrap; }
+    .auth-button:hover:not(:disabled) { background: #eff4e9; }
+    .auth-button:disabled { opacity: .65; cursor: wait; }
+    .auth-status { position: absolute; right: 0; top: 42px; max-width: min(340px, 90vw); z-index: 5; padding: 10px 12px; border-radius: 10px; background: #fff4ed; color: #995a3d; box-shadow: 0 5px 20px #00000012; font-size: 12px; line-height: 1.55; }
+    .auth-status[hidden] { display: none; }
+    .header-actions { position: relative; }
+    .local-note { color: var(--muted); font-size: 12px; display: flex; align-items: center; gap: 7px; }
+    .local-note::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: #8cae62; }
+    .hero { text-align: center; margin-bottom: 34px; }
+    .eyebrow { color: #74844f; font-size: 11px; font-weight: 800; letter-spacing: .18em; text-transform: uppercase; margin-bottom: 14px; }
+    h1 { font-family: Georgia, "Noto Serif TC", serif; font-size: clamp(34px, 5vw, 54px); line-height: 1.18; letter-spacing: -.05em; margin: 0; font-weight: 700; }
+    h1 span { color: #638151; }
+    .subtitle { color: var(--muted); font-size: 14px; margin: 13px 0 0; }
+    .layout { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(300px, .8fr); gap: 22px; align-items: stretch; }
+    .card { background: var(--surface); border: 1px solid rgba(226, 225, 215, .8); border-radius: 22px; box-shadow: var(--shadow); }
+    .wheel-card { min-height: 530px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 31px 24px 28px; position: relative; overflow: hidden; }
+    .wheel-card::before { content: ''; position: absolute; width: 360px; height: 360px; background: #f8f7ef; border-radius: 50%; z-index: 0; pointer-events: none; }
+    .wheel-wrap { width: min(360px, 80vw); aspect-ratio: 1; position: relative; z-index: 1; margin: 0 auto 26px; }
+    .wheel { width: 100%; height: 100%; border-radius: 50%; border: 8px solid #fff; box-shadow: 0 8px 25px rgba(36, 77, 58, .16), 0 0 0 1px #e8eadf; transition: transform 4s cubic-bezier(.13,.72,.12,1); overflow: hidden; }
+    .wheel svg { display: block; width: 100%; height: 100%; }
+    .wheel-center { position: absolute; top: 50%; left: 50%; translate: -50% -50%; width: 58px; height: 58px; border: 6px solid white; border-radius: 50%; background: var(--green); box-shadow: 0 2px 8px #152b2140; z-index: 3; }
+    .wheel-center::after { content: '✦'; color: var(--lime); position: absolute; inset: 0; display: grid; place-items: center; font-size: 21px; }
+    .pointer { position: absolute; top: -9px; left: 50%; translate: -50% 0; z-index: 4; width: 0; height: 0; border-left: 13px solid transparent; border-right: 13px solid transparent; border-top: 27px solid var(--coral); filter: drop-shadow(0 2px 1px #0002); }
+    .spin-button { position: relative; z-index: 2; flex: none; border: 0; border-radius: 14px; background: var(--green); color: white; padding: 15px 36px; min-width: 194px; font-weight: 750; box-shadow: 0 7px 0 var(--green-deep); transition: transform .15s, box-shadow .15s, background .15s; }
+    .spin-button:hover:not(:disabled) { background: #2e6048; transform: translateY(-2px); box-shadow: 0 9px 0 var(--green-deep); }
+    .spin-button:active:not(:disabled) { transform: translateY(4px); box-shadow: 0 3px 0 var(--green-deep); }
+    .spin-button:disabled { opacity: .45; cursor: not-allowed; box-shadow: 0 5px 0 #9eaaa1; }
+    .wheel-hint { position: relative; z-index: 2; margin: 18px 0 0; font-size: 12px; color: #92988e; }
+    .side { display: flex; flex-direction: column; gap: 17px; }
+    .result-card { background: var(--green); color: #fffefa; border-radius: 22px; padding: 25px 25px 24px; min-height: 174px; position: relative; overflow: hidden; box-shadow: 0 14px 35px #20483222; }
+    .result-card::after { content: '✳'; position: absolute; right: 20px; top: 10px; color: #ffffff16; font-size: 106px; line-height: 1; pointer-events: none; }
+    .result-label { color: #c9d8bc; text-transform: uppercase; letter-spacing: .15em; font-size: 10px; font-weight: 800; }
+    .result-name { font-family: Georgia, "Noto Serif TC", serif; font-size: 29px; font-weight: 700; margin-top: 16px; line-height: 1.3; overflow-wrap: anywhere; position: relative; z-index: 1; }
+    .result-placeholder { color: #d6e0d4; font-size: 14px; margin-top: 22px; }
+    .result-actions { display: flex; gap: 9px; margin-top: 17px; position: relative; z-index: 2; }
+    .small-button { border: 1px solid #ffffff60; border-radius: 10px; color: #fff; background: #ffffff12; padding: 9px 12px; font-size: 12px; font-weight: 700; transition: background .15s; }
+    .small-button:hover { background: #ffffff25; }
+    .list-card { flex: 1; min-height: 340px; padding: 22px 22px 17px; display: flex; flex-direction: column; }
+    .list-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 17px; }
+    h2 { font-size: 16px; margin: 0; letter-spacing: -.02em; }
+    .count { border-radius: 20px; background: #eff2e8; color: #5a6b53; font-size: 11px; font-weight: 800; padding: 5px 9px; }
+    .add-form { display: flex; gap: 8px; margin-bottom: 14px; }
+    .add-form input { min-width: 0; flex: 1; border: 1px solid var(--line); outline: 0; background: #fcfbf7; border-radius: 11px; padding: 11px 12px; font-size: 13px; color: var(--ink); transition: border .15s, box-shadow .15s; }
+    .add-form input:focus { border-color: #78976d; box-shadow: 0 0 0 3px #78976d20; }
+    .add-form input::placeholder { color: #a6aaa1; }
+    .add-button { border: 0; border-radius: 11px; background: var(--lime); color: #324330; width: 43px; font-size: 23px; font-weight: 500; transition: background .15s, transform .15s; }
+    .add-button:hover { background: #c9e481; transform: translateY(-1px); }
+    .list { margin: 0; padding: 0; list-style: none; overflow-y: auto; max-height: 238px; scrollbar-width: thin; scrollbar-color: #d6ddce transparent; }
+    .restaurant { display: flex; align-items: center; gap: 9px; border-bottom: 1px solid #f0efe8; padding: 10px 2px; animation: appear .2s ease both; }
+    .restaurant:last-child { border-bottom: 0; }
+    .restaurant-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: #96ad70; }
+    .restaurant-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+    .remove-button { flex: none; border: 0; width: 28px; height: 28px; border-radius: 8px; color: #a1a69b; background: transparent; font-size: 17px; line-height: 1; transition: color .15s, background .15s; }
+    .remove-button:hover { color: #be5c4c; background: #fff0eb; }
+    .empty-list { color: #9a9f95; font-size: 12px; text-align: center; padding: 20px 8px 16px; line-height: 1.7; }
+    .list-foot { border-top: 1px solid #f0efe8; margin-top: auto; padding-top: 12px; color: #a0a59c; font-size: 10px; display: flex; justify-content: space-between; }
+    .toast { position: fixed; left: 50%; bottom: 24px; translate: -50% 20px; opacity: 0; pointer-events: none; border-radius: 12px; padding: 11px 16px; background: #263f30; color: white; font-size: 13px; box-shadow: 0 7px 24px #0002; transition: opacity .25s, translate .25s; z-index: 10; }
+    .toast.show { opacity: 1; translate: -50% 0; }
+    @keyframes appear { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+    @media (max-width: 760px) {
+      .page { width: min(560px, calc(100% - 28px)); padding-top: 20px; }
+      header { margin-bottom: 39px; }
+      .layout { grid-template-columns: 1fr; }
+      .wheel-card { min-height: 0; padding: 27px 20px 23px; }
+      .wheel-wrap { width: min(320px, 76vw); margin-bottom: 21px; }
+      .wheel-card::before { width: 310px; height: 310px; }
+      .side { display: contents; }
+      .result-card { order: 2; }
+      .list-card { order: 3; min-height: 300px; }
+      .wheel-card { order: 1; }
+      .auth-user { display: none; }
+      .header-actions { gap: 8px; }
+      .local-note { font-size: 0; gap: 0; }
+      .local-note::before { width: 8px; height: 8px; }
+    }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; } }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header>
+      <div class="brand"><div class="brand-mark">✳</div><span>好好吃飯研究所</span></div>
+      <div class="header-actions">
+        <div class="local-note" id="storageNote">資料儲存在這台裝置</div>
+      </div>
+    </header>
+    <section class="hero" aria-labelledby="page-title">
+      <div class="eyebrow">A LITTLE DINNER DECISION</div>
+      <h1 id="page-title">今天，吃 <span>哪一家？</span></h1>
+      <p class="subtitle">把選擇交給轉盤，剩下的就交給好胃口。</p>
+    </section>
+    <section class="layout" aria-label="餐廳轉盤與清單">
+      <div class="card wheel-card">
+        <div class="wheel-wrap">
+          <div class="pointer" aria-hidden="true"></div>
+          <div class="wheel" id="wheel" aria-label="餐廳抽選轉盤"></div>
+          <div class="wheel-center" aria-hidden="true"></div>
+        </div>
+        <button class="spin-button" id="spinButton" type="button">轉一下，決定！</button>
+        <p class="wheel-hint" id="wheelHint">先新增幾家餐廳，轉盤就準備好了</p>
+      </div>
+      <div class="side">
+        <section class="result-card" aria-live="polite" aria-atomic="true">
+          <div class="result-label">今晚的答案是</div>
+          <div class="result-placeholder" id="resultPlaceholder">轉動轉盤，讓好選擇自己出現。</div>
+          <div class="result-name" id="resultName" hidden></div>
+          <div class="result-actions" id="resultActions" hidden>
+            <button type="button" class="small-button" id="againButton">↻ 再轉一次</button>
+            <button type="button" class="small-button" id="removeWinnerButton">移除這家</button>
+          </div>
+        </section>
+        <section class="card list-card" aria-labelledby="list-title">
+          <div class="list-header"><h2 id="list-title">我的餐廳</h2><span class="count" id="count">0 家</span></div>
+          <form class="add-form" id="addForm">
+            <input id="restaurantInput" type="text" maxlength="40" placeholder="輸入餐廳名稱" aria-label="餐廳名稱" autocomplete="off" required />
+            <button class="add-button" type="submit" aria-label="新增餐廳" title="新增餐廳">+</button>
+          </form>
+          <ul class="list" id="restaurantList" aria-label="餐廳清單"></ul>
+          <div class="list-foot"><span>點擊 × 移除餐廳</span><span>最多 40 字</span></div>
+        </section>
+      </div>
+    </section>
+  </main>
+  <div class="toast" id="toast" role="status"></div>
+  <script>
+    (() => {
+      const STORAGE_KEY = 'restaurant-wheel-v1';
+      const COLORS = ['#dce9be', '#f3d3ac', '#d3e4df', '#f4c9b9', '#e6dbad', '#cfdced', '#e4d5e7', '#cde0c1', '#f1dfb8', '#d5e0d4', '#f0cfc4', '#d5dcec'];
+      const $ = (selector) => document.querySelector(selector);
+      const wheel = $('#wheel');
+      const spinButton = $('#spinButton');
+      const listEl = $('#restaurantList');
+      let restaurants = loadRestaurants();
+      let winnerId = null;
+      let rotation = 0;
+      let spinning = false;
+      let toastTimer;
+
+      function loadRestaurants() {
+        try {
+          const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+          return Array.isArray(saved) ? saved.filter(item => item && typeof item.name === 'string' && typeof item.id === 'string') : [];
+        } catch { return []; }
+      }
+      function save() {
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(restaurants)); }
+        catch { showToast('無法儲存到本機，請檢查瀏覽器空間'); }
+      }
+      function render() {
+        $('#count').textContent = `${restaurants.length} 家`;
+        listEl.innerHTML = '';
+        if (!restaurants.length) {
+          const empty = document.createElement('li');
+          empty.className = 'empty-list';
+          empty.textContent = '清單還空空的，先加上你喜歡的店吧。';
+          listEl.append(empty);
+        } else {
+          restaurants.forEach(item => {
+            const li = document.createElement('li');
+            li.className = 'restaurant';
+            const dot = document.createElement('span'); dot.className = 'restaurant-dot'; dot.setAttribute('aria-hidden', 'true');
+            const name = document.createElement('span'); name.className = 'restaurant-name'; name.textContent = item.name;
+            const remove = document.createElement('button'); remove.className = 'remove-button'; remove.type = 'button'; remove.textContent = '×'; remove.setAttribute('aria-label', `移除${item.name}`); remove.title = `移除${item.name}`;
+            remove.addEventListener('click', () => removeRestaurant(item.id));
+            li.append(dot, name, remove); listEl.append(li);
+          });
+        }
+        $('#wheelHint').textContent = restaurants.length === 0
+          ? '先新增一家餐廳，轉盤就準備好了'
+          : `目前有 ${restaurants.length} 家餐廳，命運交給轉盤`;
+        spinButton.disabled = restaurants.length === 0 || spinning;
+        if (!restaurants.some(item => item.id === winnerId)) clearWinner();
+        drawWheel();
+      }
+      function drawWheel() {
+        const n = restaurants.length;
+        const size = 360, center = size / 2, radius = center - 3;
+        let parts = [`<svg viewBox="0 0 ${size} ${size}" role="img" aria-label="${n ? `${n} 家餐廳` : '尚無餐廳'}">`];
+        if (!n) {
+          parts.push(`<circle cx="${center}" cy="${center}" r="${radius}" fill="#e9eee2"/>`);
+          parts.push(`<circle cx="${center}" cy="${center}" r="${radius * .73}" fill="none" stroke="#d8e0d2" stroke-width="1" stroke-dasharray="4 7"/>`);
+          parts.push(`<text x="${center}" y="${center - 7}" text-anchor="middle" fill="#71816b" font-size="17" font-weight="700">先加一家店</text>`);
+          parts.push(`<text x="${center}" y="${center + 17}" text-anchor="middle" fill="#9aa493" font-size="11">你的美食口袋清單</text>`);
+        } else {
+          const angle = 360 / n;
+          restaurants.forEach((item, i) => {
+            const start = -90 + i * angle, end = start + angle;
+            const p1 = point(center, center, radius, start), p2 = point(center, center, radius, end);
+            const large = angle > 180 ? 1 : 0;
+            const d = n === 1 ? `M ${center} ${center} m 0 -${radius} a ${radius} ${radius} 0 1 1 0 ${radius * 2} a ${radius} ${radius} 0 1 1 0 -${radius * 2}` : `M ${center} ${center} L ${p1.x} ${p1.y} A ${radius} ${radius} 0 ${large} 1 ${p2.x} ${p2.y} Z`;
+            parts.push(`<path d="${d}" fill="${COLORS[i % COLORS.length]}" stroke="#fffefa" stroke-width="2"/>`);
+            const mid = start + angle / 2, pos = point(center, center, radius * .64, mid);
+            const label = item.name.length > 13 ? item.name.slice(0, 12) + '…' : item.name;
+            const fontSize = n > 15 ? 9 : n > 10 ? 10 : n > 6 ? 12 : 14;
+            parts.push(`<text x="${pos.x}" y="${pos.y}" transform="rotate(${mid + 90} ${pos.x} ${pos.y})" text-anchor="middle" dominant-baseline="middle" fill="#304335" font-size="${fontSize}" font-weight="700">${escapeXml(label)}</text>`);
+          });
+        }
+        parts.push('</svg>');
+        wheel.innerHTML = parts.join('');
+      }
+      function point(cx, cy, r, degrees) {
+        const rad = degrees * Math.PI / 180;
+        return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+      }
+      function escapeXml(value) {
+        return value.replace(/[<>&"']/g, char => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' })[char]);
+      }
+      function spin() {
+        if (spinning || !restaurants.length) return;
+        spinning = true; spinButton.disabled = true;
+        $('#againButton').disabled = true;
+        const index = Math.floor(Math.random() * restaurants.length);
+        const selected = restaurants[index];
+        const segment = 360 / restaurants.length;
+        const targetWithinSegment = (Math.random() - .5) * segment * .7;
+        const desired = 360 - (index * segment + segment / 2 + targetWithinSegment);
+        const current = ((rotation % 360) + 360) % 360;
+        const delta = (desired - current + 360) % 360;
+        rotation += 360 * 6 + delta;
+        wheel.style.transform = `rotate(${rotation}deg)`;
+        winnerId = selected.id;
+        window.setTimeout(() => {
+          spinning = false;
+          showWinner(selected);
+          render();
+          showToast(`命運選中了「${selected.name}」！`);
+        }, 4100);
+      }
+      function showWinner(item) {
+        $('#resultPlaceholder').hidden = true;
+        const name = $('#resultName'); name.textContent = item.name; name.hidden = false;
+        $('#resultActions').hidden = false;
+        $('#againButton').disabled = false;
+      }
+      function clearWinner() {
+        winnerId = null;
+        $('#resultName').hidden = true; $('#resultName').textContent = '';
+        $('#resultPlaceholder').hidden = false;
+        $('#resultActions').hidden = true;
+      }
+      function removeRestaurant(id) {
+        const item = restaurants.find(entry => entry.id === id);
+        restaurants = restaurants.filter(entry => entry.id !== id);
+        save();
+        if (winnerId === id) { clearWinner(); showToast(`已從清單移除「${item?.name ?? '餐廳'}」`); }
+        else showToast('已從清單移除');
+        render();
+      }
+      function showToast(message) {
+        const toast = $('#toast'); toast.textContent = message; toast.classList.add('show');
+        clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.classList.remove('show'), 2400);
+      }
+      $('#addForm').addEventListener('submit', event => {
+        event.preventDefault();
+        const input = $('#restaurantInput');
+        const name = input.value.trim();
+        if (!name) { input.focus(); return; }
+        if (restaurants.some(item => item.name.toLocaleLowerCase() === name.toLocaleLowerCase())) {
+          showToast('這家餐廳已經在清單裡了'); input.select(); return;
+        }
+        restaurants.push({ id: (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`), name });
+        save(); render(); input.value = ''; input.focus(); showToast(`已加入「${name}」`);
+      });
+      spinButton.addEventListener('click', spin);
+      $('#againButton').addEventListener('click', spin);
+      $('#removeWinnerButton').addEventListener('click', () => { if (winnerId) removeRestaurant(winnerId); });
+      render();
+    })();
+  </script>
+</body>
+</html>
+
+
+
+
