@@ -178,15 +178,12 @@
     </section>
   </main>
   <div class="toast" id="toast" role="status"></div>
+
+
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import {
-      getAuth,
-      GoogleAuthProvider,
-      onAuthStateChanged,
-      signInWithPopup,
-      signOut
-    } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+    import { getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+    import { getFirestore, collection, doc, getDocs, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyAM8Fh7InSHdACCtLqrfszVqinc2nPehfs",
@@ -197,7 +194,10 @@
       appId: "1:171960264891:web:9eab0f86b93fc791af619e"
     };
 
-    const auth = getAuth(initializeApp(firebaseConfig));
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    window.restaurantWheelDb = db;
     const provider = new GoogleAuthProvider();
     const button = document.querySelector("#authButton");
     const userArea = document.querySelector("#authUser");
@@ -211,6 +211,7 @@
     }
 
     onAuthStateChanged(auth, user => {
+      if (window.handleRestaurantAuth) window.handleRestaurantAuth(user);
       userArea.hidden = !user;
       if (user) {
         name.textContent = user.displayName || user.email || "已登入";
@@ -254,28 +255,62 @@
   </script>
   <script>
     (() => {
-      const STORAGE_KEY = 'restaurant-wheel-v1';
       const COLORS = ['#dce9be', '#f3d3ac', '#d3e4df', '#f4c9b9', '#e6dbad', '#cfdced', '#e4d5e7', '#cde0c1', '#f1dfb8', '#d5e0d4', '#f0cfc4', '#d5dcec'];
-      const $ = (selector) => document.querySelector(selector);
+      const $ = selector => document.querySelector(selector);
       const wheel = $('#wheel');
       const spinButton = $('#spinButton');
       const listEl = $('#restaurantList');
-      let restaurants = loadRestaurants();
+      let currentUser = null;
+      let restaurantsReady = false;
+      let mutationsInFlight = 0;
+      let loadSequence = 0;
+      let restaurants = [];
       let winnerId = null;
       let rotation = 0;
       let spinning = false;
       let toastTimer;
 
-      function loadRestaurants() {
+      window.handleRestaurantAuth = user => {
+        currentUser = user;
+        loadRestaurants(user);
+      };
+
+      async function loadRestaurants(user) {
+        const requestId = ++loadSequence;
+        restaurantsReady = false;
+        restaurants = [];
+        clearWinner();
+        render();
+        $('#wheelHint').textContent = user ? '正在載入你的雲端清單…' : '請先登入 Google 帳號以載入個人清單';
+        if (!user) {
+          restaurantsReady = true;
+          render();
+          return;
+        }
         try {
-          const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-          return Array.isArray(saved) ? saved.filter(item => item && typeof item.name === 'string' && typeof item.id === 'string') : [];
-        } catch { return []; }
+          const snapshot = await getDocs(collection(window.restaurantWheelDb, 'users', user.uid, 'restaurants'));
+          if (requestId !== loadSequence) return;
+          restaurants = snapshot.docs
+            .map(item => ({ id: item.id, name: item.data().name }))
+            .filter(item => typeof item.name === 'string' && item.name.trim().length > 0);
+          restaurantsReady = true;
+          render();
+        } catch (error) {
+          if (requestId !== loadSequence) return;
+          console.error('Firestore list load error:', error);
+          restaurantsReady = false;
+          $('#wheelHint').textContent = '雲端清單載入失敗，請確認 Firestore 安全規則與網路連線';
+          spinButton.disabled = true;
+          showToast(firestoreErrorMessage(error));
+        }
       }
-      function save() {
-        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(restaurants)); }
-        catch { showToast('無法儲存到本機，請檢查瀏覽器空間'); }
+
+      function firestoreErrorMessage(error) {
+        if (error?.code === 'permission-denied') return 'Firestore 拒絕存取，請確認已發布個人資料安全規則。';
+        if (error?.code === 'unavailable') return '目前無法連線到 Firestore，請檢查網路後重試。';
+        return '雲端儲存失敗，請稍後再試。';
       }
+
       function render() {
         $('#count').textContent = `${restaurants.length} 家`;
         listEl.innerHTML = '';
@@ -288,24 +323,40 @@
           restaurants.forEach(item => {
             const li = document.createElement('li');
             li.className = 'restaurant';
-            const dot = document.createElement('span'); dot.className = 'restaurant-dot'; dot.setAttribute('aria-hidden', 'true');
-            const name = document.createElement('span'); name.className = 'restaurant-name'; name.textContent = item.name;
-            const remove = document.createElement('button'); remove.className = 'remove-button'; remove.type = 'button'; remove.textContent = '×'; remove.setAttribute('aria-label', `移除${item.name}`); remove.title = `移除${item.name}`;
+            const dot = document.createElement('span');
+            dot.className = 'restaurant-dot';
+            dot.setAttribute('aria-hidden', 'true');
+            const name = document.createElement('span');
+            name.className = 'restaurant-name';
+            name.textContent = item.name;
+            const remove = document.createElement('button');
+            remove.className = 'remove-button';
+            remove.type = 'button';
+            remove.textContent = '×';
+            remove.setAttribute('aria-label', `移除${item.name}`);
+            remove.title = `移除${item.name}`;
+            remove.disabled = !restaurantsReady || mutationsInFlight > 0;
             remove.addEventListener('click', () => removeRestaurant(item.id));
-            li.append(dot, name, remove); listEl.append(li);
+            li.append(dot, name, remove);
+            listEl.append(li);
           });
         }
-        $('#wheelHint').textContent = restaurants.length === 0
-          ? '先新增一家餐廳，轉盤就準備好了'
-          : `目前有 ${restaurants.length} 家餐廳，命運交給轉盤`;
-        spinButton.disabled = restaurants.length === 0 || spinning;
+        $('#wheelHint').textContent = !currentUser
+          ? '登入後即可載入你的雲端清單'
+          : !restaurantsReady
+            ? '正在載入你的雲端清單…'
+            : restaurants.length === 0
+              ? '先新增一家餐廳，轉盤就準備好了'
+              : `目前有 ${restaurants.length} 家餐廳，命運交給轉盤`;
+        spinButton.disabled = restaurants.length === 0 || spinning || !restaurantsReady;
         if (!restaurants.some(item => item.id === winnerId)) clearWinner();
         drawWheel();
       }
+
       function drawWheel() {
         const n = restaurants.length;
         const size = 360, center = size / 2, radius = center - 3;
-        let parts = [`<svg viewBox="0 0 ${size} ${size}" role="img" aria-label="${n ? `${n} 家餐廳` : '尚無餐廳'}">`];
+        const parts = [`<svg viewBox="0 0 ${size} ${size}" role="img" aria-label="${n ? `${n} 家餐廳` : '尚無餐廳'}">`];
         if (!n) {
           parts.push(`<circle cx="${center}" cy="${center}" r="${radius}" fill="#e9eee2"/>`);
           parts.push(`<circle cx="${center}" cy="${center}" r="${radius * .73}" fill="none" stroke="#d8e0d2" stroke-width="1" stroke-dasharray="4 7"/>`);
@@ -317,7 +368,9 @@
             const start = -90 + i * angle, end = start + angle;
             const p1 = point(center, center, radius, start), p2 = point(center, center, radius, end);
             const large = angle > 180 ? 1 : 0;
-            const d = n === 1 ? `M ${center} ${center} m 0 -${radius} a ${radius} ${radius} 0 1 1 0 ${radius * 2} a ${radius} ${radius} 0 1 1 0 -${radius * 2}` : `M ${center} ${center} L ${p1.x} ${p1.y} A ${radius} ${radius} 0 ${large} 1 ${p2.x} ${p2.y} Z`;
+            const d = n === 1
+              ? `M ${center} ${center} m 0 -${radius} a ${radius} ${radius} 0 1 1 0 ${radius * 2} a ${radius} ${radius} 0 1 1 0 -${radius * 2}`
+              : `M ${center} ${center} L ${p1.x} ${p1.y} A ${radius} ${radius} 0 ${large} 1 ${p2.x} ${p2.y} Z`;
             parts.push(`<path d="${d}" fill="${COLORS[i % COLORS.length]}" stroke="#fffefa" stroke-width="2"/>`);
             const mid = start + angle / 2, pos = point(center, center, radius * .64, mid);
             const label = item.name.length > 13 ? item.name.slice(0, 12) + '…' : item.name;
@@ -328,16 +381,20 @@
         parts.push('</svg>');
         wheel.innerHTML = parts.join('');
       }
+
       function point(cx, cy, r, degrees) {
         const rad = degrees * Math.PI / 180;
         return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
       }
+
       function escapeXml(value) {
         return value.replace(/[<>&"']/g, char => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' })[char]);
       }
+
       function spin() {
-        if (spinning || !restaurants.length) return;
-        spinning = true; spinButton.disabled = true;
+        if (spinning || !restaurantsReady || !restaurants.length) return;
+        spinning = true;
+        spinButton.disabled = true;
         $('#againButton').disabled = true;
         const index = Math.floor(Math.random() * restaurants.length);
         const selected = restaurants[index];
@@ -356,44 +413,89 @@
           showToast(`命運選中了「${selected.name}」！`);
         }, 4100);
       }
+
       function showWinner(item) {
         $('#resultPlaceholder').hidden = true;
-        const name = $('#resultName'); name.textContent = item.name; name.hidden = false;
+        const winner = $('#resultName');
+        winner.textContent = item.name;
+        winner.hidden = false;
         $('#resultActions').hidden = false;
         $('#againButton').disabled = false;
       }
+
       function clearWinner() {
         winnerId = null;
-        $('#resultName').hidden = true; $('#resultName').textContent = '';
+        $('#resultName').hidden = true;
+        $('#resultName').textContent = '';
         $('#resultPlaceholder').hidden = false;
         $('#resultActions').hidden = true;
       }
-      function removeRestaurant(id) {
+
+      async function removeRestaurant(id) {
+        if (!currentUser || !restaurantsReady || mutationsInFlight) return;
         const item = restaurants.find(entry => entry.id === id);
-        restaurants = restaurants.filter(entry => entry.id !== id);
-        save();
-        if (winnerId === id) { clearWinner(); showToast(`已從清單移除「${item?.name ?? '餐廳'}」`); }
-        else showToast('已從清單移除');
+        if (!item) return;
+        mutationsInFlight++;
         render();
+        try {
+          await deleteDoc(doc(collection(window.restaurantWheelDb, 'users', currentUser.uid, 'restaurants'), id));
+          if (!currentUser) return;
+          restaurants = restaurants.filter(entry => entry.id !== id);
+          if (winnerId === id) clearWinner();
+          showToast(`已從清單移除「${item.name}」`);
+        } catch (error) {
+          console.error('Firestore delete error:', error);
+          showToast(firestoreErrorMessage(error));
+        } finally {
+          mutationsInFlight--;
+          render();
+        }
       }
+
       function showToast(message) {
-        const toast = $('#toast'); toast.textContent = message; toast.classList.add('show');
-        clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.classList.remove('show'), 2400);
+        const toast = $('#toast');
+        toast.textContent = message;
+        toast.classList.add('show');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => toast.classList.remove('show'), 2400);
       }
-      $('#addForm').addEventListener('submit', event => {
+
+      $('#addForm').addEventListener('submit', async event => {
         event.preventDefault();
         const input = $('#restaurantInput');
         const name = input.value.trim();
         if (!name) { input.focus(); return; }
+        if (!currentUser) { showToast('請先登入 Google 帳號'); return; }
+        if (!restaurantsReady || mutationsInFlight) { showToast('清單尚未準備好，請稍後再試'); return; }
         if (restaurants.some(item => item.name.toLocaleLowerCase() === name.toLocaleLowerCase())) {
-          showToast('這家餐廳已經在清單裡了'); input.select(); return;
+          showToast('這家餐廳已經在清單裡了');
+          input.select();
+          return;
         }
-        restaurants.push({ id: (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`), name });
-        save(); render(); input.value = ''; input.focus(); showToast(`已加入「${name}」`);
+        const item = { id: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`, name };
+        mutationsInFlight++;
+        render();
+        try {
+          await setDoc(doc(collection(window.restaurantWheelDb, 'users', currentUser.uid, 'restaurants'), item.id), { name: item.name });
+          if (!currentUser) return;
+          restaurants.push(item);
+          render();
+          input.value = '';
+          input.focus();
+          showToast(`已加入「${name}」`);
+        } catch (error) {
+          console.error('Firestore save error:', error);
+          showToast(firestoreErrorMessage(error));
+        } finally {
+          mutationsInFlight--;
+          render();
+        }
       });
+
       spinButton.addEventListener('click', spin);
       $('#againButton').addEventListener('click', spin);
       $('#removeWinnerButton').addEventListener('click', () => { if (winnerId) removeRestaurant(winnerId); });
+      window.refreshRestaurantList = loadRestaurants;
       render();
     })();
   </script>
