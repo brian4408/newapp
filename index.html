@@ -211,7 +211,9 @@
     }
 
     onAuthStateChanged(auth, user => {
-      if (window.handleRestaurantAuth) window.handleRestaurantAuth(user);
+      if (typeof window.handleRestaurantAuth === "function") {
+        window.handleRestaurantAuth(user);
+      }
       userArea.hidden = !user;
       if (user) {
         name.textContent = user.displayName || user.email || "已登入";
@@ -270,10 +272,7 @@
       let spinning = false;
       let toastTimer;
 
-      window.handleRestaurantAuth = user => {
-        currentUser = user;
-        loadRestaurants(user);
-      };
+
 
       async function loadRestaurants(user) {
         const requestId = ++loadSequence;
@@ -281,7 +280,6 @@
         restaurants = [];
         clearWinner();
         render();
-        $('#wheelHint').textContent = user ? '正在載入你的雲端清單…' : '請先登入 Google 帳號以載入個人清單';
         if (!user) {
           restaurantsReady = true;
           render();
@@ -495,7 +493,11 @@
       spinButton.addEventListener('click', spin);
       $('#againButton').addEventListener('click', spin);
       $('#removeWinnerButton').addEventListener('click', () => { if (winnerId) removeRestaurant(winnerId); });
-      window.refreshRestaurantList = loadRestaurants;
+      window.handleRestaurantAuth = user => {
+        currentUser = user;
+        loadRestaurants(user);
+      };
+
       render();
     })();
   </script>
